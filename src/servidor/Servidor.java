@@ -5,6 +5,7 @@
  */
 package servidor;
 
+import com.sun.corba.se.impl.io.InputStreamHook;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -13,6 +14,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.function.ObjDoubleConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -104,9 +106,8 @@ public class Servidor {
                 cliente.enviarMensaje(cantMaxCon);
                 cliente.enviarMensaje(clientesConectados.size());
             }
-            
+
             System.out.println("La cantidad maxima de clientes conectados se ha alcanzado.");
-         
             comienzoJuego();
 
         } catch (IOException | ClassNotFoundException e) {
@@ -118,7 +119,12 @@ public class Servidor {
         //Se establecen los turnos
         Collections.shuffle(clientes);
         for (ServerSideConnection cliente : clientes) {
-            
+            cliente.enviarMensaje(true);
+            for (ServerSideConnection cliente1 : clientes) {
+                cliente1.enviarMensaje(cliente.recibirMensaje());
+            }
+
+            cliente.enviarMensaje(false);
         }
 
     }
@@ -172,13 +178,14 @@ public class Servidor {
                 Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
-        
-        public void limpiarSalida(){
+
+        public Object recibirMensaje() {
             try {
-                dos.flush();
-            } catch (IOException ex) {
+                return dis.readObject();
+            } catch (IOException | ClassNotFoundException ex) {
                 Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
             }
+            return null;
         }
 
     }
