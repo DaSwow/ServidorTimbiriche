@@ -12,6 +12,7 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,7 +23,7 @@ import java.util.logging.Logger;
 public class Servidor {
 
     //Cantidad maxima de clientes conectados
-    private int cantMaxCon = 10;
+    private int cantMaxCon = 0;
     //Cantidad actual de clientes conectados
     private ArrayList<String> clientesConectados = new ArrayList();
     //Servidor
@@ -31,7 +32,8 @@ public class Servidor {
     private final int port = 9876;
 
     //Los posibles jugadores
-    private ArrayList<ServerSideConnection> sockets = new ArrayList<>();
+    private ArrayList<ServerSideConnection> clientes = new ArrayList<>();
+
     private ServerSideConnection jugador1;
     private ServerSideConnection jugador2;
     private ServerSideConnection jugador3;
@@ -51,58 +53,72 @@ public class Servidor {
         try {
             System.out.println("Esperando conexiones");
 
-            while (clientesConectados.size() < cantMaxCon) {
+            while (true) {
                 Socket socket = serverSocket.accept();
                 ObjectOutputStream dos = new ObjectOutputStream(socket.getOutputStream());
                 ObjectInputStream dis = new ObjectInputStream(socket.getInputStream());
 
-                if (cantMaxCon == 10) {
-
+                if (cantMaxCon == 0 && clientesConectados.isEmpty()) {
                     cantMaxCon = (Integer) dis.readObject();
+
                     System.out.println("Cantidad maxima de jugadores: " + cantMaxCon);
                 }
                 String nuevoJugador = (String) dis.readObject();
                 clientesConectados.add(nuevoJugador);
                 System.out.println("Jugador " + nuevoJugador + " agregado");
 
-                ArrayList numero = new ArrayList();
-                numero.add(cantMaxCon);
-                dos.writeObject(numero);
-                dos.flush();
                 ServerSideConnection ssc = new ServerSideConnection(socket, dos, dis, clientesConectados.size(), nuevoJugador);
 
+                //Agreagr los disintos clientes a una lista para poder enviarles mensajes en cualquier momento 
+                //y que no se borren al entrar una nueva conexion
                 if (jugador1 == null) {
                     jugador1 = ssc;
-                    sockets.add(jugador1);
+                    clientes.add(jugador1);
                 } else if (jugador2 == null) {
                     jugador2 = ssc;
-                    sockets.add(jugador2);
+                    clientes.add(jugador2);
                 } else if (jugador3 == null) {
                     jugador3 = ssc;
-                    sockets.add(jugador3);
+                    clientes.add(jugador3);
                 } else if (jugador4 == null) {
                     jugador4 = ssc;
-                    sockets.add(jugador4);
+                    clientes.add(jugador4);
                 }
 
-                for (ServerSideConnection s : sockets) {
-                    if (s.getSocket() != socket) {
-                        dos = new ObjectOutputStream(s.getSocket().getOutputStream());
-                        dos.flush();
-                    }
-                    dos.writeObject(clientesConectados);
-                    dos.flush();
+                //Enviar a los servidores la cantidad maxima de conexiones permitidas y la cantidas de clientes conectados
+                for (ServerSideConnection cliente : clientes) {
+                    cliente.enviarMensaje(cantMaxCon);
+                    cliente.enviarMensaje(clientesConectados.size());
                 }
 
                 Thread hilo = new Thread(ssc);
                 hilo.start();
+                if (clientesConectados.size() == cantMaxCon) {
+
+                    break;
+                }
 
             }
+            //Enviar a los servidores la cantidad maxima de conexiones permitidas y la cantidas de clientes conectados
+            for (ServerSideConnection cliente : clientes) {
+                cliente.enviarMensaje(cantMaxCon);
+                cliente.enviarMensaje(clientesConectados.size());
+            }
+            
             System.out.println("La cantidad maxima de clientes conectados se ha alcanzado.");
-        } catch (IOException e) {
+         
+            comienzoJuego();
+
+        } catch (IOException | ClassNotFoundException e) {
             System.out.println(e.getMessage());
-        } catch (ClassNotFoundException ex) {
-            System.out.println(ex.getMessage());
+        }
+    }
+
+    public void comienzoJuego() {
+        //Se establecen los turnos
+        Collections.shuffle(clientes);
+        for (ServerSideConnection cliente : clientes) {
+            
         }
 
     }
@@ -146,6 +162,23 @@ public class Servidor {
 
         public Socket getSocket() {
             return socket;
+        }
+
+        public void enviarMensaje(Object object) {
+            try {
+                dos.writeObject(object);
+                dos.flush();
+            } catch (IOException ex) {
+                Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        
+        public void limpiarSalida(){
+            try {
+                dos.flush();
+            } catch (IOException ex) {
+                Logger.getLogger(Servidor.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
 
     }
