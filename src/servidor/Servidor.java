@@ -11,7 +11,9 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,11 +42,10 @@ public class Servidor {
 
     public Servidor() {
         System.out.println("Servidor encendido.");
-
         try {
             serverSocket = new ServerSocket(port);
         } catch (IOException e) {
-            System.out.println("Error al construir el servidor.");
+            System.out.println("Error al iniciar el servidor.");
         }
     }
 
@@ -59,14 +60,13 @@ public class Servidor {
 
                 if (cantMaxCon == 0 && clientesConectados.isEmpty()) {
                     cantMaxCon = (Integer) dis.readObject();
-
                     System.out.println("Cantidad maxima de jugadores: " + cantMaxCon);
                 }
                 String nuevoJugador = (String) dis.readObject();
                 clientesConectados.add(nuevoJugador);
                 System.out.println("Jugador " + nuevoJugador + " agregado");
 
-                ServerSideConnection ssc = new ServerSideConnection(socket, dos, dis, clientesConectados.size(), nuevoJugador);
+                ServerSideConnection ssc = new ServerSideConnection(socket, dos, dis, cantMaxCon, nuevoJugador);
 
                 //Agreagr los disintos clientes a una lista para poder enviarles mensajes en cualquier momento 
                 //y que no se borren al entrar una nueva conexion
@@ -84,53 +84,64 @@ public class Servidor {
                     clientes.add(jugador4);
                 }
 
+                ssc.enviarMensaje(cantMaxCon);
                 //Enviar a los servidores la cantidad maxima de conexiones permitidas y la cantidas de clientes conectados
                 for (ServerSideConnection cliente : clientes) {
-                    cliente.enviarMensaje(cantMaxCon);
                     cliente.enviarMensaje(clientesConectados.size());
                 }
-
-                Thread hilo = new Thread(ssc);
-                hilo.start();
                 if (clientesConectados.size() == cantMaxCon) {
-
                     break;
                 }
-
             }
             //Enviar a los servidores la cantidad maxima de conexiones permitidas y la cantidas de clientes conectados
             for (ServerSideConnection cliente : clientes) {
-                cliente.enviarMensaje(cantMaxCon);
+                //cliente.enviarMensaje(cantMaxCon);
                 cliente.enviarMensaje(clientesConectados.size());
             }
 
             System.out.println("La cantidad maxima de clientes conectados se ha alcanzado.");
-            comienzoJuego();
+            comenzarJuego();
 
         } catch (IOException | ClassNotFoundException e) {
             System.out.println(e.getMessage());
         }
     }
 
-    public void comienzoJuego() {
-        //Se establecen los turnos
-        Collections.shuffle(clientes);
+    public void comenzarJuego() {
+        //   Collections.shuffle(clientes);
+        for (int i = 0; i < clientes.size(); i++) {
+            clientes.get(i).setTurno(i + 1);
+        }
+        
         for (ServerSideConnection cliente : clientes) {
-            cliente.enviarMensaje(true);
-            for (ServerSideConnection cliente1 : clientes) {
-                cliente1.enviarMensaje(cliente.recibirMensaje());
-            }
-
-            cliente.enviarMensaje(false);
+            cliente.enviarMensaje(clientes.size());
+            cliente.enviarMensaje(cliente.getTurno());
         }
 
+        while (true) {
+
+            for (int i = 0; i < clientes.size(); i++) {
+                //Enviar el numero activo a todos los clientes
+                for (ServerSideConnection cliente : clientes) {
+                    cliente.enviarMensaje(i+1);
+                }
+                //Muestra nombre del jugador en turno
+                System.out.println("Turno del jugador en turno:" + clientes.get(i).getNombre());
+                //Espera recibir una jugada del jugador en turno para enviarla a todos los demas jugadores
+                 Object object=null ;
+
+                      object = clientes.get(i).recibirMensaje();
+                   
+                for (ServerSideConnection cliente1 : clientes) {
+                    cliente1.enviarMensaje(object);
+                }
+            }
+        }
     }
 
     public static void main(String args[]) throws IOException {
         Servidor s = new Servidor();
         s.aceptarConexiones();
     }
-
-
 
 }
